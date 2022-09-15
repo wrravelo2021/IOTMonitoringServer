@@ -75,6 +75,10 @@ def analyze_data():
         minutes_diff = (datetime.now(timezone.utc) - item['station__last_activity']).total_seconds() / 60.0
         minutes_diff = round(minutes_diff, 1)
         variable = item["measurement__name"]
+        country = item['station__location__country__name']
+        state = item['station__location__state__name']
+        city = item['station__location__city__name']
+        user = item['station__user__username']
 
         if minutes_diff > 2:
             message = "ALERT Hace dos minutos no se reciben datos de {}".format(variable)
