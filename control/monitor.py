@@ -7,6 +7,7 @@ import paho.mqtt.client as mqtt
 import schedule
 import time
 from django.conf import settings
+from datetime import datetime, timezone
 
 client = mqtt.Client(settings.MQTT_USER_PUB)
 
@@ -52,6 +53,32 @@ def analyze_data():
             message = "ALERT {} {} {}".format(variable, min_value, max_value)
             topic = '{}/{}/{}/{}/in'.format(country, state, city, user)
             print(datetime.now(), "Sending alert to {} {}".format(topic, variable))
+            client.publish(topic, message)
+            alerts += 1
+
+    # Nuevas alertas reto
+    data = Data.objects
+    aggregation = data.select_related('station', 'measurement') \
+        .select_related('station__user', 'station__location') \
+        .select_related('station__location__city', 'station__location__state',
+                        'station__location__country') \
+        .values('station__user__username',
+                'measurement__name',
+                'measurement__max_value',
+                'measurement__min_value',
+                'station__location__city__name',
+                'station__location__state__name',
+                'station__location__country__name',
+                'station__last_activity')
+    for item in aggregation:
+        alert = False
+        minutes_diff = (datetime.now(timezone.utc) - item['station__last_activity']).total_seconds() / 60.0
+        minutes_diff = round(minutes_diff, 1)
+
+        if minutes_diff > 2:
+            message = "ALERT Hace dos minutos no se reciben datos de {}".format(variable)
+            topic = '{}/{}/{}/{}/in'.format(country, state, city, user)
+            print(datetime.now(), "Sending no reception values alert to {} {}".format(topic, variable))
             client.publish(topic, message)
             alerts += 1
 
@@ -105,7 +132,7 @@ def start_cron():
     Inicia el cron que se encarga de ejecutar la función analyze_data cada 5 minutos.
     '''
     print("Iniciando cron...")
-    schedule.every(5).minutes.do(analyze_data)
+    schedule.every(5).seconds.do(analyze_data)
     print("Servicio de control iniciado")
     while 1:
         schedule.run_pending()
